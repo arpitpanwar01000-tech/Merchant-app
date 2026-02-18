@@ -3,6 +3,9 @@ import cors from "cors";
 import dotenv from "dotenv";
 import { poolPromise } from "./config/db.js";
 import authRoutes from "./routes/auth.routes.js"
+import merchantroutes from "./routes/merchant.routes.js"
+import userroutes from "./routes/user.routes.js"
+import plantroutes from "./routes/plant.routes.js"
 
 dotenv.config();
 
@@ -16,6 +19,9 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/merchant",merchantroutes)
+app.use("/api/user",userroutes)
+app.use("/api/plant",plantroutes)
 
 const PORT = process.env.PORT || 5000;
 
