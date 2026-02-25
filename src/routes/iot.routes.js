@@ -246,8 +246,8 @@ router.get('/exampleInv', async (req, res) => {
             finalResult = nonGtiResult.data;
             inverterType = 'non-gti';
         } else {
-            return res.status(404).json({
-                success: false,
+            return res.json({
+                success: true,
                 message: 'No data found for given MAC/IMEI',
                 mac,
                 range,
