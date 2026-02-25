@@ -6,6 +6,8 @@ import authRoutes from "./routes/auth.routes.js"
 import merchantroutes from "./routes/merchant.routes.js"
 import userroutes from "./routes/user.routes.js"
 import plantroutes from "./routes/plant.routes.js"
+import iotRoutes from "./routes/iot.routes.js"
+import displayRoutes from "./routes/display.routes.js"
 
 dotenv.config();
 
@@ -22,6 +24,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/merchant",merchantroutes)
 app.use("/api/user",userroutes)
 app.use("/api/plant",plantroutes)
+app.use("/api/iot",iotRoutes)
+app.use("/api/display",displayRoutes)
 
 const PORT = process.env.PORT || 5000;
 
