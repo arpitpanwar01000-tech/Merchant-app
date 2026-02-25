@@ -93,4 +93,20 @@ router.post('/fetch-device-dashboard', async (req, res) => {
 });
 
 
+router.get('/requested-plants/:merchantId', async (req, res) => {
+    try {
+        
+        const { merchantId } = req.params;
+        console.log("merchant Id",merchantId)
+        if (!merchantId) {
+            return res.status(400).json({ success: false, message: 'merchantId is Required' })
+        }
+        let query = `select EastmenProduct.*, EastmenCustomer.Email as CustomerEmail from EastmenProduct INNER JOIN EastmenCustomer ON EastmenProduct.CustomerID = EastmenCustomer.ID where EastmenProduct.MerchantID = @merchantId and EastmenProduct.AuthorisedRequest = 1 `;
+        let data = await executeQuery(query, { merchantId });
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
 export default router;
