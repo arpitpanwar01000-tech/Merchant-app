@@ -41,9 +41,9 @@ const makeApiRequest = async (url, method = 'GET', data = null) => {
             url: url
         };
     }
+
+
 };
-
-
 
 router.get('/combined-data', async (req, res) => {
     try {
@@ -250,5 +250,267 @@ router.get('/details/:id', async (req, res) => {
     }
 });
 
+
+router.get('/filtered-plants', async (req, res) => {
+    try {
+        // 1. Get the filter text from the query parameters
+        const filterText = req.query.filterText || '';
+        console.log(`Received Filter Text: ${filterText}`);
+
+        let baseQuery = `FROM EastmenProduct AS EP 
+            INNER JOIN 
+                EastmenIotRegister AS EIR ON EP.ID = EIR.CustomerProductID 
+            INNER JOIN 
+                EastmenCustomer AS EC ON EP.CustomerID = EC.ID
+            LEFT JOIN EastmenMechant EM ON EP.MerchantID = EM.ID
+                
+            
+        `;
+        let whereClauses = [];
+        let params = {};
+
+        // 3. Construct the WHERE clause to search only IMEI OR CustomerEmail
+        if (filterText) {
+            const filterValueWithWildcards = `%${filterText}%`;
+            whereClauses.push(`
+                (
+                    EIR.IMEI LIKE @filterText 
+                    OR EC.Email LIKE @filterText 
+                )
+            `);
+            params['filterText'] = filterValueWithWildcards;
+        }
+
+        let whereSql = '';
+        if (whereClauses.length > 0) {
+            whereSql = ' WHERE ' + whereClauses.join(' AND ');
+        }
+
+        const selectColumns = `
+            SELECT 
+                EP.*, 
+                EIR.IMEI, 
+                EC.Email as Email
+        `;
+        const dataQuery = `${selectColumns} ${baseQuery} ${whereSql}`;
+
+        const products = await executeQuery(dataQuery, params);
+        res.json({
+            data: products,
+            total: products.length,
+        });
+
+    } catch (err) {
+        // console.error('Failed to fetch filtered products:', err);
+        res.status(500).send({
+            message: 'Failed to fetch products (Check SQL syntax and table/column names)',
+            error: err.message
+        });
+    }
+});
+
+
+
+router.post('/authreq', async (req, res) => {
+    console.log("hit")
+    const { merchantId, AuthorisedType, id, directAuth = false } = req.body;
+    console.log(merchantId, AuthorisedType, id, directAuth);
+    try {
+
+        if (directAuth) {
+            const sqlQuery = `
+            UPDATE EastmenProduct
+            SET
+            MerchantID = @merchantId,
+            AuthorisedType = @AuthorisedType,
+            AuthorisedMerchant = 1
+            WHERE
+            ID = @id;
+            `;
+            const params = {
+                id: id,
+                merchantId: merchantId,
+                AuthorisedType: AuthorisedType,
+                authorisedRequestBy: 'ADMIN' // Key now matches '@authorisedRequestBy'
+            };
+            await executeQuery(sqlQuery, params);
+            res.status(200).send({ message: `Product with ID ${id} was updated successfully.` });
+        } else {
+
+            const sqlQuery = `
+            UPDATE EastmenProduct
+            SET
+            MerchantID = @merchantId,
+            AuthorisedType = @AuthorisedType,
+            AuthorisedRequest = 1,
+            AuthorisedRequestBY = @authorisedRequestBy, -- Corrected typo in column name if it exists in DB
+            AuthorisedRequestDate = GETDATE()
+            WHERE
+            ID = @id;
+            `;
+            const params = {
+                id: id,
+                merchantId: merchantId,
+                AuthorisedType: AuthorisedType,
+                authorisedRequestBy: 'MERCHANT' // Key now matches '@authorisedRequestBy'
+            };
+            await executeQuery(sqlQuery, params);
+            res.status(200).send({ message: `Product with ID ${id} was updated successfully.` });
+        }
+    } catch (err) {
+        console.error('Database update error:', err);
+        res.status(500).send({ message: 'Failed to update product', error: err.message });
+    }
+});
+
+
+
+router.post('/devices/:macId/:type/LOG', async (req, res) => {
+    const { macId, type } = req.params;
+    console.log("macId:", macId, "type:", type)
+    if (!macId || !type) {
+        return res.status(400).json({ message: 'macId and type are required' });
+    }
+
+    try {
+        const macIdInput = String(macId);
+        const params = { macIdInput };
+
+        let loggerData = [];
+
+        if (type === 'GTI') {
+
+
+            const loggerQuery = `
+        SELECT TOP 1 *
+        FROM EastmenGTILAlloggerData
+        WHERE MAC = @macIdInput
+      `;
+
+            loggerData = await executeQuery(loggerQuery, params);
+        } else if (type === 'NON_GTI') {
+
+
+
+            const loggerQuery = `
+        SELECT TOP 1 *
+        FROM EastmenInverterLoggerData
+        WHERE IMEI = @macIdInput
+      `;
+
+            loggerData = await executeQuery(loggerQuery, params);
+        } else {
+            return res.status(400).json({
+                message: 'Invalid type. Use GTI or NON_GTI'
+            });
+        }
+
+        return res.json({
+              macId,
+              type,
+              loggerData
+        });
+
+    } catch (err) {
+        console.error('Device API Error:', err);
+        return res.status(500).json({
+            message: 'Failed to fetch device data',
+            error: err.message
+        });
+    }
+});
+
+
+router.post('/devices/:macId/:type/INV', async (req, res) => {
+    const { macId, type } = req.params;
+    console.log("macId:", macId, "type:", type)
+    console.log("inverter hit")
+    if (!macId || !type) {
+        return res.status(400).json({ message: 'macId and type are required' });
+    }
+
+    try {
+        const macIdInput = String(macId);
+        const params = { macIdInput };
+
+        let inverterData = [];
+
+        if (type === 'GTI') {
+
+            const inverterQuery = `
+                SELECT TOP 1 *
+                FROM EastmenAllGTIInverterData
+                WHERE MAC = @macIdInput
+                ORDER BY server_datetime DESC
+              `;
+
+            inverterData = await executeQuery(inverterQuery, params);
+
+        } else if (type === 'NON_GTI') {
+
+            const inverterQuery = `
+                SELECT TOP 1 *
+                FROM EastmenInverterData
+                WHERE IMEI = @macIdInput
+                ORDER BY server_datetime DESC
+              `;
+            inverterData = await executeQuery(inverterQuery, params);
+
+
+        } else {
+            return res.status(400).json({
+                message: 'Invalid type. Use GTI or NON_GTI'
+            });
+        }
+
+        return res.json({
+            macId,
+            type,
+            inverterData,
+        });
+
+    } catch (err) {
+        console.error('Device API Error:', err);
+        return res.status(500).json({
+            message: 'Failed to fetch device data',
+            error: err.message
+        });
+    }
+});
+
+router.get('/fault/desc', async (req, res) => {
+  try {
+    const { id, phase } = req.query;
+    console.log("idphase",id,phase)
+
+    if (!id || !phase) {
+      return res.status(400).json({
+        success: false,
+        message: "id and phase are required"
+      });
+    }
+
+    const query = `
+      SELECT *
+      FROM GTIFaultMaster
+      WHERE Faultid = @id AND phase = @phase
+    `;
+
+    const params = { id: String(id), phase:String(phase) };
+    console.log("param",params)
+
+    const result = await executeQuery(query, params);
+    console.log("result,",result)
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    console.error("Error fetching FaultMaster:", error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
 export default router;
